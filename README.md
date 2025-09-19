@@ -1,16 +1,690 @@
-## Hi there 👋
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>长江流域特色美食地图</title>
+    <!-- 引入外部资源 -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.8/dist/chart.umd.min.js"></script>
+    
+    <!-- 配置Tailwind主题 -->
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#165DFF',
+                        secondary: '#FF7D00',
+                        healthy: '#36B37E',
+                        moderate: '#FFAB00',
+                        highcal: '#FF5630',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+    
+    <style type="text/tailwindcss">
+        @layer utilities {
+            .content-auto {
+                content-visibility: auto;
+            }
+            .card-hover {
+                @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
+            }
+            .food-img {
+                @apply w-full h-68 object-cover rounded-lg mb-3;
+            }
+        }
+    </style>
+    
+    <style>
+        #map { 
+            height: 100%; 
+            width: 100%;
+            border-radius: 8px;
+        }
+        
+        /* 自定义地图标记样式 */
+        .custom-marker {
+            transition: transform 0.2s ease;
+        }
+        
+        .custom-marker:hover {
+            transform: scale(1.2);
+        }
+        
+        /* 图片加载动画 */
+        .img-loading {
+            background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+            background-size: 200% 100%;
+            animation: loading 1.5s infinite;
+        }
+        
+        @keyframes loading {
+            0% { background-position: 200% 0; }
+            100% { background-position: -200% 0; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 font-sans text-gray-800">
+    <header class="bg-white shadow-sm sticky top-0 z-50">
+        <div class="container mx-auto px-4 py-4 flex flex-wrap items-center justify-between">
+            <div class="flex items-center">
+                <i class="fa fa-cutlery text-primary text-2xl mr-3"></i>
+                <h1 class="text-xl md:text-2xl font-bold text-primary">长江流域特色美食地图</h1>
+            </div>
+        </div>
+    </header>
+    
+    <main class="container mx-auto px-4 py-6">
+        <!-- 数据概览 -->
+        <section class="mb-8">
+            <h2 class="text-xl font-semibold mb-4">数据概览</h2>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div class="bg-white rounded-lg p-5 shadow card-hover">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-gray-500 text-sm">覆盖地区</p>
+                            <h3 class="text-2xl font-bold mt-1">11个</h3>
+                        </div>
+                        <div class="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-primary">
+                            <i class="fa fa-map-marker"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg p-5 shadow card-hover">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-gray-500 text-sm">特色美食</p>
+                            <h3 class="text-2xl font-bold mt-1">11种</h3>
+                        </div>
+                        <div class="w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center text-secondary">
+                            <i class="fa fa-cutlery"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg p-5 shadow card-hover">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-gray-500 text-sm">平均卡路里</p>
+                            <h3 h3 id="averageCaloriesDisplay" class="text-2xl font-bold mt-1">198 大卡</h3>
+                        </div>
+                        <div class="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center text-healthy">
+                            <i class="fa fa-fire"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="bg-white rounded-lg p-5 shadow card-hover">
+                    <div class="flex justify-between items-start">
+                        <div>
+                            <p class="text-gray-500 text-sm">健康推荐</p>
+                            <h3 class="text-2xl font-bold mt-1">6种</h3>
+                        </div>
+                        <div class="w-10 h-10 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                            <i class="fa fa-heart"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 筛选区域 -->
+        <section class="mb-6 bg-white p-4 rounded-lg shadow">
+            <div class="flex flex-wrap gap-4">
+                <div class="flex items-center">
+                    <label for="regionFilter" class="text-gray-600 mr-2">地区筛选:</label>
+                    <select id="regionFilter" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50">
+                        <option value="all">全部地区</option>
+                        <option value="青海">青海</option>
+                        <option value="西藏">西藏</option>
+                        <option value="四川">四川</option>
+                        <option value="云南">云南</option>
+                        <option value="重庆">重庆</option>
+                        <option value="湖北">湖北</option>
+                        <option value="湖南">湖南</option>
+                        <option value="江西">江西</option>
+                        <option value="安徽">安徽</option>
+                        <option value="江苏">江苏</option>
+                        <option value="上海">上海</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center">
+                    <label for="calorieFilter" class="text-gray-600 mr-2">卡路里筛选:</label>
+                    <select id="calorieFilter" class="border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50">
+                        <option value="all">全部</option>
+                        <option value="low">低卡 (<150大卡)</option>
+                        <option value="medium">中卡 (150-300大卡)</option>
+                        <option value="high">高卡 (>300大卡)</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-center ml-auto">
+                    <button id="resetFilters" class="text-gray-600 hover:text-primary transition flex items-center">
+                        <i class="fa fa-refresh mr-1"></i> 重置筛选
+                    </button>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 主要可视化区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+            <!-- 交互式地图 -->
+            <div class="lg:col-span-2 bg-white rounded-lg p-4 shadow h-[600px]">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-lg font-semibold">美食地理分布</h2>
+                    <div class="text-sm text-gray-500 flex items-center gap-3">
+                        <div class="flex items-center">
+                            <span class="inline-block w-3 h-3 bg-healthy rounded-full mr-1"></span>
+                            <span>低卡</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="inline-block w-3 h-3 bg-moderate rounded-full mr-1"></span>
+                            <span>中卡</span>
+                        </div>
+                        <div class="flex items-center">
+                            <span class="inline-block w-3 h-3 bg-highcal rounded-full mr-1"></span>
+                            <span>高卡</span>
+                        </div>
+                    </div>
+                </div>
+                <div id="map" class="border border-gray-100"></div>
+            </div>
+            
+            <!-- 美食详情面板 -->
+            <div class="lg:col-span-1 bg-white rounded-lg p-4 shadow min-h-[600px]">
+                <h2 class="text-lg font-semibold mb-4">美食详情</h2>
+                <div id="foodDetail" class="space-y-4">
+                    <div class="flex flex-col items-center justify-center h-full text-gray-400 p-6">
+                        <i class="fa fa-map-marker text-4xl mb-3 opacity-30"></i>
+                        <p class="text-center">点击地图上的标记查看美食详情</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 图表区域 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 卡路里对比图表 -->
+            <div class="bg-white rounded-lg p-4 shadow">
+                <h2 class="text-lg font-semibold mb-4">各地区美食卡路里对比</h2>
+                <div class="h-[300px]">
+                    <canvas id="calorieChart"></canvas>
+                </div>
+            </div>
+            
+            <!-- 健康美食推荐 -->
+            <div class="bg-white rounded-lg p-4 shadow">
+                <h2 class="text-lg font-semibold mb-4">健康美食推荐</h2>
+                <div class="h-[300px]">
+                    <canvas id="healthChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </main>
+    
+    <!-- 页脚 -->
+    <footer class="bg-white mt-10 py-6 border-t">
+        <div class="container mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>长江流域特色美食数据可视化 | 卡路里数据仅供参考（每100克）</p>
+        </div>
+    </footer>
+    
 
-<!--
-**Beommmyyu/Beommmyyu** is a ✨ _special_ ✨ repository because its `README.md` (this file) appears on your GitHub profile.
-
-Here are some ideas to get you started:
-
-- 🔭 I’m currently working on ...
-- 🌱 I’m currently learning ...
-- 👯 I’m looking to collaborate on ...
-- 🤔 I’m looking for help with ...
-- 💬 Ask me about ...
-- 📫 How to reach me: ...
-- 😄 Pronouns: ...
-- ⚡ Fun fact: ...
--->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 长江流域11个地区的特色美食数据
+            const foodData = [
+                {
+                    id: 1,
+                    name: "手抓羊肉",
+                    location: [36.6172, 101.7797], // 西宁
+                    region: "青海",
+                    calories: 220,
+                    description: "青海手抓羊肉的肉质香嫩、鲜而不膻、肥而不腻，是西北人热情好客的象征，食用时可搭配椒盐和大蒜，肋条肉味道最为鲜美。",
+                    healthTips: "富含优质蛋白和铁，但脂肪含量较高，建议搭配蔬菜并控制食用份量。",
+                    healthScore: 7.0,
+                    image: "images/yangrou.jpg" // 手抓羊肉图片
+                },
+                {
+                    id: 2,
+                    name: "酥油茶",
+                    location: [29.6500, 91.1000], // 拉萨
+                    region: "西藏",
+                    calories: 60,
+                    description: "酥油茶是藏族传统饮品，用酥油、砖茶和盐调制而成，口感浓郁，能快速补充能量。",
+                    healthTips: "热量主要来自脂肪，能抗寒但不宜过量饮用，高血脂人群需谨慎。",
+                    healthScore: 6.5,
+                    image: "images/suyoucha.jpg" // 酥油茶图片
+                },
+                {
+                    id: 3,
+                    name: "四川火锅",
+                    location: [30.6570, 104.0650], // 成都
+                    region: "四川",
+                    calories: 250,
+                    description: "四川火锅以麻辣鲜香著称，食材丰富多样，是社交和饮食文化的重要载体。",
+                    healthTips: "锅底油脂含量高，建议选择清汤或鸳鸯锅，多搭配蔬菜和豆制品。",
+                    healthScore: 5.5,
+                    image: "images/huoguo.jpg" // 火锅图片
+                },
+                {
+                    id: 4,
+                    name: "过桥米线",
+                    location: [25.0389, 102.7183], // 昆明
+                    region: "云南",
+                    calories: 180,
+                    description: "过桥米线是云南特色美食，以鸡汤煮鲜米线，配以多种配料，汤鲜料足，风味独特。",
+                    healthTips: "营养均衡，但注意汤底油脂含量，适量食用。",
+                    healthScore: 7.8,
+                    image: "images/guoqiaomixian.jpg" // 米线相关图片
+                },
+                {
+                    id: 5,
+                    name: "重庆小面",
+                    location: [29.5630, 106.5516], // 重庆
+                    region: "重庆",
+                    calories: 280,
+                    description: "重庆小面是重庆特色面食，麻辣鲜香，配料丰富，面条劲道，是当地人最爱的早餐之一。",
+                    healthTips: "碳水化合物和油脂含量较高，注意控制份量，可要求少油少辣。",
+                    healthScore: 6.0,
+                    image: "images/xiaomian.jpg" // 重庆小面图片
+                },
+                {
+                    id: 6,
+                    name: "武汉热干面",
+                    location: [30.5928, 114.3055], // 武汉
+                    region: "湖北",
+                    calories: 290,
+                    description: "武汉热干面是湖北武汉的特色小吃，面条筋道，拌以芝麻酱、萝卜干等调料。",
+                    healthTips: "碳水化合物含量高，可搭配蔬菜汤平衡营养。",
+                    healthScore: 5.7,
+                    image: "images/reganmian.jpg" // 热干面图片
+                },
+                {
+                    id: 7,
+                    name: "剁椒鱼头",
+                    location: [28.1129, 112.9834], // 长沙
+                    region: "湖南",
+                    calories: 160,
+                    description: "剁椒鱼头是湖南传统名菜，以新鲜鱼头配以湖南剁椒蒸制而成，鲜辣可口。",
+                    healthTips: "鱼肉富含优质蛋白质，辣椒能促进新陈代谢，但剁椒盐分较高，高血压人群需注意食用量。",
+                    healthScore: 7.2,
+                    image: "images/duojiaoyutou.jpg" // 鱼头相关图片
+                },
+                {
+                    id: 8,
+                    name: "瓦罐汤",
+                    location: [28.6824, 115.8570], // 南昌
+                    region: "江西",
+                    calories: 140,
+                    description: "江西瓦罐汤是将食材放入瓦罐中，用炭火慢煨而成，汤鲜味美，营养丰富。",
+                    healthTips: "汤类营养易吸收，热量适中，是较为健康的选择，但注意撇去表面浮油。。",
+                    healthScore: 8.3,
+                    image: "images/waguantang.jpg" // 汤类相关图片
+                },
+                {
+                    id: 9,
+                    name: "麻饼",
+                    location: [30.5723, 117.2868], // 合肥
+                    region: "安徽",
+                    calories: 380,
+                    description: "麻饼是安徽传统糕点，以芝麻、面粉、糖等为原料制成，香甜酥脆，是节庆佳品。",
+                    healthTips: "高糖高脂食物，热量较高，建议作为偶尔享用的点心，不宜过量。",
+                    healthScore: 4.5,
+                    image: "images/mabing.jpg" // 麻饼图片
+                },
+                {
+                    id: 10,
+                    name: "鸭血粉丝汤",
+                    location: [32.0603, 118.7969], // 南京
+                    region: "江苏",
+                    calories: 112,
+                    description: "鸭血粉丝汤是南京的传统名吃，由鸭血、鸭杂、粉丝等熬制而成，汤鲜味美。",
+                    healthTips: "鸭血富含铁质，粉丝提供碳水化合物，整体营养均衡，热量适中。",
+                    healthScore: 8.5,
+                    image: "images/yaxuefensitang.jpg" // 汤粉相关图片
+                },
+                {
+                    id: 11,
+                    name: "小笼包",
+                    location: [31.2304, 121.4737], // 上海
+                    region: "上海",
+                    calories: 230,
+                    description: "上海小笼包以皮薄馅足、汤汁鲜美著称，通常用猪肉馅，配以姜丝醋食用。",
+                    healthTips: "肉馅和皮冻使热量不低，建议搭配醋食用以助消化，并注意控制食用数量。",
+                    healthScore: 6.8,
+                    image: "images/xiaolongbao.jpg" // 包子相关图片
+                }
+            ];
+            
+            // 初始化地图
+            const map = L.map('map').setView([32.8066, 108.3463], 4);
+			
+            // 添加中国地图图层
+            L.tileLayer('https://t{s}.tianditu.gov.cn/DataServer?T=vec_w&x={x}&y={y}&l={z}&tk=c2b6c673a0bf4a0571d36b1239bd1383', {
+                subdomains: ['0', '1', '2', '3', '4', '5', '6', '7'],
+                            maxZoom: 18,
+                            attribution: '© 天地图 版权所有'
+            }).addTo(map);
+            
+            // 存储所有标记
+            let markers = [];
+            
+            // 根据卡路里获取标记颜色
+            function getMarkerColor(calories) {
+                if (calories < 150) return "#36B37E"; // 健康绿
+                if (calories < 300) return "#FFAB00"; // 中等黄
+                return "#FF5630"; // 高卡红
+            }
+			
+			 // --- 更新平均卡路里 ---
+			    function updateAverageCalories() {
+			        // 检查是否有标记显示
+			        if (markers.length === 0) {
+			            document.querySelector('.text-healthy').textContent = "0 大卡";
+			            return;
+			        }
+			        
+			        // 计算所有当前显示标记的卡路里总和
+			        const totalCalories = markers.reduce((sum, marker) => {
+			            return sum + marker.options.calories;
+			        }, 0);
+			        
+			        // 计算平均值并四舍五入
+			        const average = Math.round(totalCalories / markers.length);
+			        
+			        // 更新页面上的显示
+			        document.getElementById('averageCaloriesDisplay').textContent = `${average} 大卡`;
+			    }
+            
+            // 添加标记到地图
+            function addMarkers(data) {
+                // 清除现有标记
+                markers.forEach(marker => map.removeLayer(marker));
+                markers = [];
+                
+                data.forEach(food => {
+                    // 创建自定义图标
+                    const markerIcon = L.divIcon({
+                        className: 'custom-marker',
+                        html: `<div style="background-color: ${getMarkerColor(food.calories)}; width: 16px; height: 16px; border-radius: 50%; border: 2px solid white; box-shadow: 0 0 0 2px ${getMarkerColor(food.calories)};"></div>`,
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                    });
+                    // 将卡路里数据附加到marker的options中，方便后续计算
+                    const marker = L.marker(food.location, {icon: markerIcon, calories: food.calories}).addTo(map);
+                    markers.push(marker);
+                    
+                    // 绑定弹出窗口
+                    marker.bindPopup(`
+                        <strong>${food.name}</strong><br>
+                        地区: ${food.region}<br>
+                        卡路里: ${food.calories} 大卡/100g
+                    `);
+                    
+                    // 点击标记时显示详细信息
+                    marker.on('click', () => {
+                        showFoodDetail(food);
+                    });
+                });
+				// --- 调用：每次添加标记后，更新平均值 ---
+				        updateAverageCalories();
+            }
+            
+            // 显示食物详情，包括图片
+            function showFoodDetail(food) {
+                const detailEl = document.getElementById('foodDetail');
+                
+                // 先显示加载状态
+                detailEl.innerHTML = `
+                    <div class="border-b pb-3">
+                        <h3 class="text-xl font-bold text-primary">${food.name}</h3>
+                        <p class="text-gray-600">${food.region}</p>
+                    </div>
+                    <div class="img-loading food-img"></div>
+                    <div class="animate-pulse">
+                        <div class="h-4 bg-gray-200 rounded mb-2 w-3/4"></div>
+                        <div class="h-4 bg-gray-200 rounded mb-4 w-1/2"></div>
+                    </div>
+                `;
+                
+                // 创建图片元素并加载
+                const img = new Image();
+                img.src = food.image;
+                img.alt = food.name;
+                img.className = "food-img";
+                
+                // 图片加载完成后更新内容
+                img.onload = function() {
+                    detailEl.innerHTML = `
+                        <div class="border-b pb-3">
+                            <h3 class="text-xl font-bold text-primary">${food.name}</h3>
+                            <p class="text-gray-600">${food.region}</p>
+                        </div>
+                        
+                        <img src="${food.image}" alt="${food.name}" class="food-img">
+                        
+                        <div>
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-gray-600">卡路里</span>
+                                <span class="font-semibold" style="color: ${getMarkerColor(food.calories)}">
+                                    ${food.calories} 大卡/100g
+                                </span>
+                            </div>
+                            
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="text-gray-600">健康指数</span>
+                                <span class="font-semibold text-healthy">${food.healthScore}/10</span>
+                            </div>
+                            
+                            <div>
+                                <h4 class="font-medium mb-1">简介</h4>
+                                <p class="text-gray-600 text-sm">${food.description}</p>
+                            </div>
+                            
+                            <div class="mt-3">
+                                <h4 class="font-medium mb-1">健康提示</h4>
+                                <p class="text-gray-600 text-sm">${food.healthTips}</p>
+                            </div>
+                        </div>
+                    `;
+                };
+            }
+            
+            // 初始化图表
+            let calorieChart, healthChart;
+            
+            function initCharts() {
+                // 卡路里对比图表
+                const calorieCtx = document.getElementById('calorieChart').getContext('2d');
+                
+                // 按地区排序
+                const sortedData = [...foodData].sort((a, b) => {
+                    const regions = ["青海", "西藏", "四川", "云南", "重庆", "湖北", "湖南", "江西", "安徽", "江苏", "上海"];
+                    return regions.indexOf(a.region) - regions.indexOf(b.region);
+                });
+                
+                calorieChart = new Chart(calorieCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: sortedData.map(item => item.region),
+                        datasets: [{
+                            label: '卡路里（100g）',
+                            data: sortedData.map(item => item.calories),
+                            backgroundColor: sortedData.map(item => getMarkerColor(item.calories)),
+                            borderColor: sortedData.map(item => getMarkerColor(item.calories)),
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: '卡路里 (大卡)'
+                                }
+                            }
+                        },
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    title: function(context) {
+                                        const index = context[0].dataIndex;
+                                        return `${sortedData[index].region} - ${sortedData[index].name}`;
+                                    },
+                                    label: function(context) {
+                                        return `卡路里: ${context.raw} 大卡/100g`;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+                
+                updateHealthRadarChart(foodData);
+            }
+            /**
+                 * 根据传入的数据更新或创建健康美食雷达图
+                 * @param {Array} data - 食物对象数组
+                 */
+                function updateHealthRadarChart(data) {
+                    const healthCtx = document.getElementById('healthChart').getContext('2d');
+                    
+                    // 从传入的数据中，获取健康指数最高的前6个食物
+                    const topHealthyFoods = [...data]
+                        .sort((a, b) => b.healthScore - a.healthScore)
+                        .slice(0, 6);
+            
+                    // 如果图表已存在，则销毁它，以便重新创建
+                    if (healthChart) {
+                        healthChart.destroy();
+                    }
+            
+                    // 如果没有数据或数据为空，显示提示信息并退出
+                    if (topHealthyFoods.length === 0) {
+                         document.getElementById('healthChart').parentElement.innerHTML = '<p class="text-center text-gray-500 py-12">当前筛选条件下没有数据可显示。</p>';
+                         return;
+                    }
+                    
+                    // 确保 canvas 元素存在（如果之前被替换）
+                    if (!document.getElementById('healthChart')) {
+                        document.getElementById('healthChartContainer').innerHTML = '<canvas id="healthChart"></canvas>';
+                    }
+            
+                    // 创建或更新雷达图
+                    healthChart = new Chart(document.getElementById('healthChart'), {
+                        type: 'radar',
+                        data: {
+                            // 雷达图的每个角（标签）是一种食物的名称和地区
+                            labels: topHealthyFoods.map(f => `${f.name} (${f.region})`),
+                            datasets: [{
+                                label: '健康指数',
+                                data: topHealthyFoods.map(f => f.healthScore),
+                                backgroundColor: 'rgba(54, 179, 126, 0.2)', // healthy color with opacity
+                                borderColor: '#36B37E', // healthy color
+                                pointBackgroundColor: '#36B37E',
+                                pointBorderColor: '#fff',
+                                pointHoverBackgroundColor: '#fff',
+                                pointHoverBorderColor: '#36B37E'
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                r: {
+                                    angleLines: { display: true },
+                                    suggestedMin: 0,
+                                    suggestedMax: 10,
+                                    ticks: {
+                                        stepSize: 2,
+                                        backdropColor: 'rgba(0,0,0,0)' // 隐藏刻度线背景
+                                    },
+                                     pointLabels: {
+                                        font: {
+                                            size: 11
+                                        },
+                                        padding: 15
+                                    }
+                                }
+                            },
+                            plugins: {
+                                legend: {
+                                    display: false // 隐藏图例，因为只有一个数据集
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: function(context) {
+                                            const index = context.dataIndex;
+                                            return [
+                                                `健康指数: ${topHealthyFoods[index].healthScore}/10`,
+                                                `卡路里: ${topHealthyFoods[index].calories} 大卡/100g`
+                                            ];
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+    
+            // 筛选功能
+            function filterFoods() {
+                const region = document.getElementById('regionFilter').value;
+                const calorieRange = document.getElementById('calorieFilter').value;
+                
+                let filtered = [...foodData];
+                
+                // 地区筛选
+                if (region !== 'all') {
+                    filtered = filtered.filter(food => food.region === region);
+                }
+                
+                // 卡路里筛选
+                if (calorieRange === 'low') {
+                    filtered = filtered.filter(food => food.calories < 150);
+                } else if (calorieRange === 'medium') {
+                    filtered = filtered.filter(food => food.calories >= 150 && food.calories < 300);
+                } else if (calorieRange === 'high') {
+                    filtered = filtered.filter(food => food.calories >= 300);
+                }
+                
+                // 更新标记
+                addMarkers(filtered);
+				updateHealthRadarChart(filtered);
+            }
+            //为筛选下拉菜单添加事件监听器
+            // 当用户选择不同选项时，调用 filterFoods 函数更新地图
+            document.getElementById('regionFilter').addEventListener('change', filterFoods);
+            document.getElementById('calorieFilter').addEventListener('change', filterFoods);
+            // 重置筛选
+            document.getElementById('resetFilters').addEventListener('click', () => {
+                document.getElementById('regionFilter').value = 'all';
+                document.getElementById('calorieFilter').value = 'all';
+                addMarkers(foodData);
+				updateHealthRadarChart(foodData);
+            });
+            
+            // 初始化
+            addMarkers(foodData);
+            initCharts();
+			
+        });
+    </script>
+</body>
+</html>
